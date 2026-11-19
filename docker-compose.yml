@@ -1,0 +1,47 @@
+x-app-env: &app-env
+  MONGO_URL: mongodb://mongo:27017
+  MONGO_DB: notifications
+  REDIS_URL: redis://redis:6379/0
+
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - mongodata:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    environment: *app-env
+    ports:
+      - "8000:8000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: celery -A app.tasks worker --loglevel=INFO --concurrency=2
+    environment: *app-env
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  mongodata:
